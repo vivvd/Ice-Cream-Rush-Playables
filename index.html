@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#ff6f91" />
+    <meta name="description" content="Build colorful ice cream orders and keep the rush under control." />
+    <title>Ice Cream Rush</title>
+    <script src="https://www.youtube.com/game_api/v1"></script>
+  </head>
+  <body>
+    <div id="app" class="app-shell" aria-live="polite">
+      <main class="boot-screen">
+        <div class="boot-logo" aria-hidden="true">
+          <span class="boot-scoop boot-scoop-one"></span>
+          <span class="boot-scoop boot-scoop-two"></span>
+          <span class="boot-cone"></span>
+        </div>
+        <p class="boot-kicker">ICE CREAM RUSH</p>
+        <h1>Opening the parlor…</h1>
+        <div class="loading-track"><span></span></div>
+      </main>
+    </div>
+    <noscript>This game requires JavaScript.</noscript>
+    <script>
+      if (window.location.protocol === "file:") {
+        const heading = document.querySelector(".boot-screen h1");
+        const message = document.querySelector(".boot-kicker");
+        const loadingTrack = document.querySelector(".loading-track");
+
+        if (heading) heading.textContent = "Local server required";
+        if (message) message.textContent = "RUN NPM START IN THIS FOLDER";
+        if (loadingTrack) loadingTrack.hidden = true;
+      }
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

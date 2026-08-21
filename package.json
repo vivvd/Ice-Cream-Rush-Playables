@@ -1,0 +1,35 @@
+{
+  "name": "ice-cream-rush",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm run build && vite preview --host 127.0.0.1 --port 4173",
+    "dev": "vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:sites": "SITES_BUILD=1 npm run build && node scripts/prepare-sites-build.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "thumbnails": "node scripts/generate-thumbnails.mjs",
+    "qa:screenshots": "node scripts/capture-qa.mjs",
+    "smoke:release": "node scripts/smoke-release.mjs",
+    "analyze": "node scripts/analyze-bundle.mjs dist",
+    "package": "python3 scripts/package-playable.py dist release/ice-cream-rush-playable.zip"
+  },
+  "dependencies": {
+    "@fontsource/fredoka": "^5.2.6"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "@openai/sites-vite-plugin": "^0.1.0",
+    "@playwright/test": "^1.54.2",
+    "@types/node": "^24.3.0",
+    "sharp": "^0.34.3",
+    "typescript": "^5.9.2",
+    "vite": "^8.0.13",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.92.0"
+  }
+}
