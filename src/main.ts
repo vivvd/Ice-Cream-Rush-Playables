@@ -69,6 +69,7 @@ import {
 
 type Screen = "menu" | "levels" | "gameplay" | "result";
 type Modal = "settings" | "guide" | "pause" | "platformPause" | "resumeGate" | "abandon" | null;
+type FeedbackTone = "success" | "fast" | "warning" | "error" | "timeout" | "unlock";
 
 interface DragState {
   pointerId: number;
@@ -87,6 +88,12 @@ interface DepartureFeedback {
 
 interface ServedFlash {
   item: OrderItem;
+}
+
+interface FeedbackState {
+  message: string;
+  tone: FeedbackTone;
+  expiresAt: number;
 }
 
 interface PendingRun {
@@ -108,6 +115,7 @@ class IceCreamRushApp {
   private lastFrame = 0;
   private saveTimer?: number;
   private feedbackTimer?: number;
+  private feedbackState?: FeedbackState;
   private servedFlashTimer?: number;
   private ingredientTrayScrollLeft = 0;
   private drag?: DragState;
@@ -728,6 +736,7 @@ class IceCreamRushApp {
       }
     }
     this.audio.play("tap");
+    this.refreshRewardFeedback();
     this.render();
   }
 
@@ -1296,14 +1305,34 @@ class IceCreamRushApp {
     await this.platform.saveData(this.save);
   }
 
-  private showFeedback(message: string, tone: "success" | "fast" | "warning" | "error" | "timeout" | "unlock"): void {
-    const feedback = this.root.querySelector<HTMLElement>("#feedback");
-    if (!feedback) return;
-    feedback.textContent = message;
-    feedback.className = `feedback is-visible feedback-${tone}`;
+  private showFeedback(message: string, tone: FeedbackTone): void {
+    const visibleFor = tone === "success" || tone === "fast" ? 3_000 : 1_700;
+    this.feedbackState = { message, tone, expiresAt: Date.now() + visibleFor };
+    this.restoreFeedback();
     if (this.feedbackTimer !== undefined) window.clearTimeout(this.feedbackTimer);
-    const visibleFor = tone === "success" || tone === "fast" ? 3_200 : 1_700;
-    this.feedbackTimer = window.setTimeout(() => feedback.classList.remove("is-visible"), visibleFor);
+    this.feedbackTimer = window.setTimeout(() => this.clearFeedback(), visibleFor);
+  }
+
+  private refreshRewardFeedback(): void {
+    const feedback = this.feedbackState;
+    if (!feedback || (feedback.tone !== "success" && feedback.tone !== "fast")) return;
+    feedback.expiresAt = Date.now() + 3_000;
+    if (this.feedbackTimer !== undefined) window.clearTimeout(this.feedbackTimer);
+    this.feedbackTimer = window.setTimeout(() => this.clearFeedback(), 3_000);
+  }
+
+  private clearFeedback(): void {
+    this.feedbackState = undefined;
+    this.feedbackTimer = undefined;
+    this.root.querySelector<HTMLElement>("#feedback")?.classList.remove("is-visible");
+  }
+
+  private restoreFeedback(): void {
+    const feedback = this.root.querySelector<HTMLElement>("#feedback");
+    const state = this.feedbackState;
+    if (!feedback || !state || Date.now() >= state.expiresAt) return;
+    feedback.textContent = state.message;
+    feedback.className = `feedback is-visible feedback-${state.tone}`;
   }
 
   private render(): void {
@@ -1314,6 +1343,7 @@ class IceCreamRushApp {
     else if (this.screen === "levels") this.renderLevelSelect();
     else if (this.screen === "result") this.renderResult();
     else this.renderGameplay();
+    if (this.screen === "gameplay") this.restoreFeedback();
   }
 
   private renderMenu(): void {
