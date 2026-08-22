@@ -782,7 +782,9 @@ class IceCreamRushApp {
     this.servedFlashTimer = window.setTimeout(() => {
       this.servedFlash = undefined;
       this.servedFlashTimer = undefined;
-      if (this.screen === "gameplay") this.render();
+      // Do not replace the whole game DOM here: a quick ingredient tap may be
+      // between pointerdown and click while the confirmation animation ends.
+      this.root.querySelector(".served-item-flash")?.remove();
     }, this.save.settings.reducedMotion ? 80 : 280);
   }
 

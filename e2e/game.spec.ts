@@ -374,6 +374,26 @@ test("serves a three-item ticket in any order and preserves progress after a wro
   expect(after.run.customers[0]?.servedItems).toHaveLength(1);
 });
 
+test("keeps a rapid ingredient tap after serving when the success pop-up ends", async ({ page }) => {
+  await startFirstLevel(page);
+  await page.evaluate(() => window.__ICE_CREAM_RUSH_DEBUG__?.setDemoTicket());
+  await page.getByRole("button", { name: "Add Lemonade" }).click();
+  await page.getByRole("button", { name: "SERVE" }).click();
+
+  await page.evaluate(() => {
+    const button = document.querySelector<HTMLElement>("[aria-label='Add Cone']");
+    if (!button) throw new Error("Cone button is missing");
+    window.setTimeout(() => button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })), 250);
+    window.setTimeout(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })), 300);
+  });
+  await page.waitForTimeout(380);
+
+  const snapshot = await page.evaluate(() => window.__ICE_CREAM_RUSH_DEBUG__?.snapshot() as {
+    run: { customers: Array<{ build: { type?: string; base?: string } }> };
+  });
+  expect(snapshot.run.customers[0]?.build).toMatchObject({ type: "iceCream", base: "cone" });
+});
+
 test("switches customer mood at 60, 30, and 15 percent", async ({ page }) => {
   await startFirstLevel(page);
   await page.evaluate(() => window.__ICE_CREAM_RUSH_DEBUG__?.setDemoTicket());
