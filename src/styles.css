@@ -3436,3 +3436,10 @@ button[aria-disabled="true"] {
     grid-template-rows: minmax(48px, 25%) minmax(150px, 75%);
   }
 }
+
+/* Mobile cards keep their price and product name; prerequisites remain available to screen readers. */
+@media (max-width: 620px) {
+  .ingredient-tray .product-prerequisite {
+    display: none;
+  }
+}

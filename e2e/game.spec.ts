@@ -97,7 +97,7 @@ test("teaches per-item serving and auto-completes the first ticket", async ({ pa
   await expect(page.locator(".coins-pill strong")).not.toHaveText("0");
 });
 
-test("supports drag cancellation, drag-and-drop, and nested SDK pause", async ({ page }) => {
+test("supports desktop drag-and-drop, mobile tap-only input, and nested SDK pause", async ({ page }) => {
   await startFirstLevel(page);
   await page.getByRole("button", { name: "Add Cone" }).click();
   const scoop = page.getByRole("button", { name: "Add Vanilla" });
@@ -112,11 +112,16 @@ test("supports drag cancellation, drag-and-drop, and nested SDK pause", async ({
   await expect(page.locator(".drag-ghost")).toHaveCount(0);
   await expect(station.locator(".dessert-scoop")).toHaveCount(0);
 
-  await page.mouse.move(scoopBox.x + scoopBox.width / 2, scoopBox.y + scoopBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(stationBox.x + stationBox.width / 2, stationBox.y + stationBox.height / 2, { steps: 8 });
-  await page.mouse.up();
-  await expect(station.locator(".dessert-scoop")).toHaveCount(1);
+  if ((page.viewportSize()?.width ?? 0) <= 620) {
+    await scoop.click();
+    await expect(station.locator(".dessert-scoop")).toHaveCount(1);
+  } else {
+    await page.mouse.move(scoopBox.x + scoopBox.width / 2, scoopBox.y + scoopBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(stationBox.x + stationBox.width / 2, stationBox.y + stationBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(station.locator(".dessert-scoop")).toHaveCount(1);
+  }
 
   await page.getByRole("button", { name: "Pause game" }).click();
   await expect(page.getByRole("heading", { name: "GAME PAUSED" })).toBeVisible();

@@ -109,6 +109,7 @@ class IceCreamRushApp {
   private saveTimer?: number;
   private feedbackTimer?: number;
   private servedFlashTimer?: number;
+  private ingredientTrayScrollLeft = 0;
   private drag?: DragState;
   private suppressClickUntil = 0;
   private purchaseLockUntil = 0;
@@ -425,6 +426,7 @@ class IceCreamRushApp {
     void this.audio.unlock();
     const element = (event.target as HTMLElement).closest<HTMLElement>("[data-action='ingredient']");
     if (!element || !this.canUseGameplayControls()) return;
+    if (this.isMobileLayout()) return;
     const selection = this.selectionFromElement(element);
     if (!selection) return;
     this.drag = {
@@ -472,6 +474,10 @@ class IceCreamRushApp {
     this.drag?.ghost?.remove();
     this.drag = undefined;
     this.root.querySelector(".assembly-dropzone")?.classList.remove("drop-ready");
+  }
+
+  private isMobileLayout(): boolean {
+    return window.matchMedia?.("(max-width: 620px)").matches ?? window.innerWidth <= 620;
   }
 
   private pointInside(x: number, y: number, element: HTMLElement): boolean {
@@ -1298,6 +1304,8 @@ class IceCreamRushApp {
   }
 
   private render(): void {
+    const tray = this.root.querySelector<HTMLElement>(".ingredient-tray");
+    if (tray) this.ingredientTrayScrollLeft = tray.scrollLeft;
     this.root.classList.toggle("reduce-motion", this.save?.settings.reducedMotion ?? false);
     if (this.screen === "menu") this.renderMenu();
     else if (this.screen === "levels") this.renderLevelSelect();
@@ -1420,6 +1428,8 @@ class IceCreamRushApp {
       ${this.modalHtml()}
       <div id="feedback" class="feedback" role="status"></div>
     </main>`;
+    const tray = this.root.querySelector<HTMLElement>(".ingredient-tray");
+    if (tray) tray.scrollLeft = this.ingredientTrayScrollLeft;
     this.updateLiveDom();
   }
 
