@@ -14,6 +14,7 @@
     "test:e2e": "playwright test",
     "thumbnails": "node scripts/generate-thumbnails.mjs",
     "qa:screenshots": "node scripts/capture-qa.mjs",
+    "assets:validate": "node scripts/validate-assets.mjs",
     "smoke:release": "node scripts/smoke-release.mjs",
     "analyze": "node scripts/analyze-bundle.mjs dist",
     "package": "python3 scripts/package-playable.py dist release/ice-cream-rush-playable.zip"

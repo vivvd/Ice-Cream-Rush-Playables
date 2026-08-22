@@ -1,7 +1,8 @@
-import { BASE_PATIENCE_MS, FAST_THRESHOLD, MAX_COMBO, UPGRADES } from "./config";
+import { BASE_PATIENCE_MS, FAST_THRESHOLD, LEVELS, MAX_COMBO, TOTAL_LEVELS, UPGRADES } from "./config";
 import type {
   BaseId,
   BuildState,
+  CinnamonGlazeId,
   CustomerKind,
   CustomerState,
   DrinkComponentId,
@@ -9,8 +10,10 @@ import type {
   FlavorId,
   IceCreamOrder,
   OrderItem,
+  CampaignProgress,
+  RunMode,
   RunState,
-  SaveV2,
+  SaveV5,
   ToppingId,
   UpgradeId,
   UpgradeTrack,
@@ -21,17 +24,28 @@ const FLAVORS: FlavorId[] = ["vanilla", "chocolate", "strawberry", "mint"];
 const TOPPINGS: ToppingId[] = ["sprinkles", "drizzle"];
 const FAST_DRINKS: FastDrinkId[] = ["lemonade", "berrySoda"];
 const BUBBLE_STEPS: DrinkComponentId[] = ["teaCup", "milkTea", "pearls"];
+const CINNAMON_GLAZES: CinnamonGlazeId[] = ["vanillaGlaze", "chocolateGlaze", "berryGlaze"];
 
 export const emptyBuild = (): BuildState => ({ scoops: [], bubbleSteps: [] });
 
-export function defaultSave(): SaveV2 {
+export function defaultCampaign(): CampaignProgress {
   return {
-    version: 2,
+    completedThrough: 0,
+    bestEarnings: Array.from({ length: TOTAL_LEVELS }, () => 0),
+    endlessUnlocked: false,
+  };
+}
+
+export function defaultSave(): SaveV5 {
+  return {
+    version: 5,
     coins: 0,
     upgrades: [],
     tutorialComplete: false,
+    bakeryTutorialComplete: false,
     bestScore: 0,
     settings: { music: true, sfx: true, reducedMotion: false },
+    campaign: defaultCampaign(),
     activeRun: null,
   };
 }
@@ -39,50 +53,95 @@ export function defaultSave(): SaveV2 {
 const isUpgrade = (value: unknown): value is UpgradeId =>
   typeof value === "string" && UPGRADES.some((upgrade) => upgrade.id === value);
 
-export function migrateSave(raw: string | null | undefined): SaveV2 {
+export function migrateSave(raw: string | null | undefined): SaveV5 {
   if (!raw) return defaultSave();
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;
-    if (value.version === 2) return sanitizeSaveV2(value);
-    if (value.version === 1) return migrateSaveV1(value);
+    if (value.version === 5) return sanitizeSaveV5(value);
+    if (value.version === 4) return migrateSaveV4(value);
+    if (value.version === 3) return migrateLegacySave(value, sanitizeRunV3(value.activeRun));
+    if (value.version === 2) return migrateLegacySave(value, migrateRunV2(value.activeRun));
+    if (value.version === 1) return migrateLegacySave(value, migrateRunV1(value.activeRun));
     return defaultSave();
   } catch {
     return defaultSave();
   }
 }
 
-function sanitizeSaveV2(value: Record<string, unknown>): SaveV2 {
+function sanitizeSaveV5(value: Record<string, unknown>): SaveV5 {
   const base = defaultSave();
   const settings = isRecord(value.settings) ? value.settings : {};
   return {
-    version: 2,
+    version: 5,
     coins: clampInt(value.coins, 0, Number.MAX_SAFE_INTEGER, 0),
     upgrades: sanitizeUpgrades(value.upgrades),
     tutorialComplete: value.tutorialComplete === true,
+    bakeryTutorialComplete: value.bakeryTutorialComplete === true,
     bestScore: clampInt(value.bestScore, 0, Number.MAX_SAFE_INTEGER, 0),
     settings: {
       music: typeof settings.music === "boolean" ? settings.music : base.settings.music,
       sfx: typeof settings.sfx === "boolean" ? settings.sfx : base.settings.sfx,
       reducedMotion: typeof settings.reducedMotion === "boolean" ? settings.reducedMotion : base.settings.reducedMotion,
     },
-    activeRun: sanitizeRunV2(value.activeRun),
+    campaign: sanitizeCampaign(value.campaign),
+    activeRun: sanitizeRunV5(value.activeRun),
   };
 }
 
-function migrateSaveV1(value: Record<string, unknown>): SaveV2 {
-  const base = sanitizeSaveV2({ ...value, version: 2, activeRun: null });
-  base.activeRun = migrateRunV1(value.activeRun);
-  return base;
+function migrateSaveV4(value: Record<string, unknown>): SaveV5 {
+  const oldCampaign = isRecord(value.campaign) ? value.campaign : {};
+  const oldCompletedThrough = clampInt(oldCampaign.completedThrough, 0, 20, 0);
+  const migrated = sanitizeSaveV5({
+    ...value,
+    version: 5,
+    campaign: { ...oldCampaign, completedThrough: oldCompletedThrough },
+  });
+  if (oldCampaign.endlessUnlocked === true || oldCompletedThrough >= 20) {
+    migrated.campaign.endlessUnlocked = true;
+  }
+  return migrated;
+}
+
+function migrateLegacySave(value: Record<string, unknown>, activeRun: RunState | null): SaveV5 {
+  const migrated = sanitizeSaveV5({ ...value, version: 5, campaign: { endlessUnlocked: true }, activeRun: null });
+  migrated.campaign.endlessUnlocked = true;
+  migrated.activeRun = activeRun ? { ...activeRun, mode: "endless", levelNumber: undefined } : null;
+  return migrated;
 }
 
 function sanitizeUpgrades(value: unknown): UpgradeId[] {
   return Array.isArray(value) ? [...new Set(value.filter(isUpgrade))] : [];
 }
 
-function sanitizeRunV2(value: unknown): RunState | null {
+function sanitizeCampaign(value: unknown): CampaignProgress {
+  const base = defaultCampaign();
+  if (!isRecord(value)) return base;
+  const completedThrough = clampInt(value.completedThrough, 0, TOTAL_LEVELS, 0);
+  const source = Array.isArray(value.bestEarnings) ? value.bestEarnings : [];
+  return {
+    completedThrough,
+    bestEarnings: Array.from({ length: TOTAL_LEVELS }, (_, index) =>
+      clampInt(source[index], 0, Number.MAX_SAFE_INTEGER, 0)),
+    endlessUnlocked: value.endlessUnlocked === true || completedThrough >= TOTAL_LEVELS,
+  };
+}
+
+function sanitizeRunV5(value: unknown): RunState | null {
+  const run = sanitizeRunV3(value);
+  if (!run || !isRecord(value)) return run;
+  const requestedLevel = clampInt(value.levelNumber, 1, TOTAL_LEVELS, 1);
+  const mode: RunMode = value.mode === "level" ? "level" : "endless";
+  return {
+    ...run,
+    mode,
+    levelNumber: mode === "level" ? requestedLevel : undefined,
+  };
+}
+
+function sanitizeRunV3(value: unknown): RunState | null {
   if (!isRecord(value) || value.active !== true || !Array.isArray(value.customers)) return null;
   const customers = value.customers
-    .map((customer) => sanitizeCustomerV2(customer))
+    .map((customer) => sanitizeCustomerV3(customer))
     .filter((customer): customer is CustomerState => Boolean(customer))
     .slice(0, 3);
   const selectedId = clampInt(value.selectedCustomerId, 1, Number.MAX_SAFE_INTEGER, -1);
@@ -90,6 +149,8 @@ function sanitizeRunV2(value: unknown): RunState | null {
   const highestId = customers.reduce((highest, customer) => Math.max(highest, customer.id), 0);
   return {
     active: true,
+    mode: "endless",
+    levelNumber: undefined,
     lives: clampInt(value.lives, 1, 3, 3),
     xp: clampInt(value.xp, 0, Number.MAX_SAFE_INTEGER, 0),
     combo: clampInt(value.combo, 1, MAX_COMBO, 1),
@@ -107,27 +168,46 @@ function sanitizeRunV2(value: unknown): RunState | null {
   };
 }
 
-function sanitizeCustomerV2(value: unknown): CustomerState | null {
-  if (!isRecord(value) || !Array.isArray(value.ticket)) return null;
-  const ticket = value.ticket.filter(isOrderItem).slice(0, 3);
-  if (ticket.length === 0) return null;
+function sanitizeCustomerV3(value: unknown): CustomerState | null {
+  if (!isRecord(value) || !Array.isArray(value.remainingTicket)) return null;
+  const remainingTicket = value.remainingTicket.filter(isOrderItem).slice(0, 3);
+  if (remainingTicket.length === 0) return null;
+  const servedItems = Array.isArray(value.servedItems) ? value.servedItems.filter(isOrderItem).slice(0, 3) : [];
   const maxPatienceMs = clampNumber(value.maxPatienceMs, 1_000, 120_000, 20_000);
-  const preparedInput = Array.isArray(value.prepared) ? value.prepared : [];
-  const prepared = ticket.map((_, index) => {
-    const item = preparedInput[index];
-    return isOrderItem(item) ? structuredClone(item) : null;
-  });
   return {
     id: clampInt(value.id, 1, Number.MAX_SAFE_INTEGER, 1),
     kind: isCustomerKind(value.kind) ? value.kind : "regular",
-    ticket: structuredClone(ticket),
-    prepared,
-    activeItemIndex: clampInt(value.activeItemIndex, 0, ticket.length - 1, 0),
+    remainingTicket: structuredClone(remainingTicket),
+    servedItems: structuredClone(servedItems),
+    activeItemIndex: clampInt(value.activeItemIndex, 0, remainingTicket.length - 1, 0),
     build: sanitizeBuild(value.build),
     maxPatienceMs,
     remainingMs: clampNumber(value.remainingMs, 0, maxPatienceMs, maxPatienceMs),
     variant: clampInt(value.variant, 0, 99, 0),
   };
+}
+
+function migrateRunV2(value: unknown): RunState | null {
+  if (!isRecord(value) || value.active !== true || !Array.isArray(value.customers)) return null;
+  const customers = value.customers.flatMap((customerValue): CustomerState[] => {
+    if (!isRecord(customerValue) || !Array.isArray(customerValue.ticket)) return [];
+    const remainingTicket = customerValue.ticket.filter(isOrderItem).slice(0, 3);
+    if (remainingTicket.length === 0) return [];
+    const currentBuild = sanitizeBuild(customerValue.build);
+    const prepared = Array.isArray(customerValue.prepared) ? customerValue.prepared.find(isOrderItem) : undefined;
+    return [{
+      id: clampInt(customerValue.id, 1, Number.MAX_SAFE_INTEGER, 1),
+      kind: isCustomerKind(customerValue.kind) ? customerValue.kind : "regular",
+      remainingTicket: structuredClone(remainingTicket),
+      servedItems: [],
+      activeItemIndex: clampInt(customerValue.activeItemIndex, 0, remainingTicket.length - 1, 0),
+      build: currentBuild.type ? currentBuild : prepared ? itemToBuild(prepared) : emptyBuild(),
+      maxPatienceMs: clampNumber(customerValue.maxPatienceMs, 1_000, 120_000, 20_000),
+      remainingMs: clampNumber(customerValue.remainingMs, 0, clampNumber(customerValue.maxPatienceMs, 1_000, 120_000, 20_000), 20_000),
+      variant: clampInt(customerValue.variant, 0, 99, 0),
+    }];
+  }).slice(0, 3);
+  return sanitizeRunV3({ ...value, customers });
 }
 
 function migrateRunV1(value: unknown): RunState | null {
@@ -141,8 +221,8 @@ function migrateRunV1(value: unknown): RunState | null {
     return [{
       id,
       kind: isCustomerKind(customerValue.kind) ? customerValue.kind : "regular",
-      ticket: [{ type: "iceCream", ...structuredClone(customerValue.order) }],
-      prepared: [null],
+      remainingTicket: [{ type: "iceCream", ...structuredClone(customerValue.order) }],
+      servedItems: [],
       activeItemIndex: 0,
       build: id === selectedId ? legacyBuild : emptyBuild(),
       maxPatienceMs,
@@ -150,7 +230,7 @@ function migrateRunV1(value: unknown): RunState | null {
       variant: clampInt(customerValue.variant, 0, 99, 0),
     }];
   }).slice(0, 3);
-  return sanitizeRunV2({ ...value, version: 2, customers, selectedCustomerId: selectedId });
+  return sanitizeRunV3({ ...value, version: 3, customers, selectedCustomerId: selectedId });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -177,6 +257,7 @@ export function isOrderItem(value: unknown): value is OrderItem {
   if (!isRecord(value)) return false;
   if (value.type === "iceCream") return isLegacyIceCreamOrder(value);
   if (value.type === "fastDrink") return FAST_DRINKS.includes(value.drink as FastDrinkId);
+  if (value.type === "cinnamonRoll") return CINNAMON_GLAZES.includes(value.glaze as CinnamonGlazeId);
   return value.type === "bubbleTea";
 }
 
@@ -205,6 +286,17 @@ export function sanitizeBuild(value: unknown): BuildState {
     }
     return { type: "bubbleTea", scoops: [], bubbleSteps: steps };
   }
+  if (value.type === "cinnamonRoll") {
+    return {
+      type: "cinnamonRoll",
+      scoops: [],
+      bubbleSteps: [],
+      cinnamonRoll: value.cinnamonRoll === true,
+      cinnamonGlaze: CINNAMON_GLAZES.includes(value.cinnamonGlaze as CinnamonGlazeId)
+        ? value.cinnamonGlaze as CinnamonGlazeId
+        : undefined,
+    };
+  }
   return emptyBuild();
 }
 
@@ -220,9 +312,11 @@ const clampNumber = (value: unknown, min: number, max: number, fallback: number)
 const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
   Math.floor(clampNumber(value, min, max, fallback));
 
-export function createRun(tutorial = false): RunState {
+export function createRun(mode: RunMode = "endless", tutorial = false, levelNumber?: number): RunState {
   return {
     active: true,
+    mode,
+    levelNumber: mode === "level" ? clampInt(levelNumber, 1, TOTAL_LEVELS, 1) : undefined,
     lives: 3,
     xp: 0,
     combo: 1,
@@ -236,6 +330,37 @@ export function createRun(tutorial = false): RunState {
     nextCustomerId: 1,
     reviveUsed: false,
     tutorial,
+  };
+}
+
+export function levelConfig(levelNumber: number) {
+  return LEVELS[clampInt(levelNumber, 1, TOTAL_LEVELS, 1) - 1]!;
+}
+
+export function effectiveElapsedMs(run: RunState): number {
+  return run.elapsedMs + (run.mode === "level" ? levelConfig(run.levelNumber ?? 1).pressureOffsetMs : 0);
+}
+
+export function levelRemainingMs(run: RunState): number {
+  if (run.mode !== "level") return Number.POSITIVE_INFINITY;
+  return Math.max(0, levelConfig(run.levelNumber ?? 1).durationMs - run.elapsedMs);
+}
+
+export function isLevelUnlocked(campaign: CampaignProgress, levelNumber: number): boolean {
+  return levelNumber >= 1 && levelNumber <= Math.min(TOTAL_LEVELS, campaign.completedThrough + 1);
+}
+
+export function recordLevelCompletion(campaign: CampaignProgress, levelNumber: number, earnings: number): CampaignProgress {
+  const level = clampInt(levelNumber, 1, TOTAL_LEVELS, 1);
+  const bestEarnings = [...campaign.bestEarnings];
+  bestEarnings[level - 1] = Math.max(bestEarnings[level - 1] ?? 0, clampInt(earnings, 0, Number.MAX_SAFE_INTEGER, 0));
+  const completedThrough = level <= campaign.completedThrough + 1
+    ? Math.max(campaign.completedThrough, level)
+    : campaign.completedThrough;
+  return {
+    completedThrough,
+    bestEarnings,
+    endlessUnlocked: campaign.endlessUnlocked || completedThrough >= TOTAL_LEVELS,
   };
 }
 
@@ -262,6 +387,14 @@ export function availableToppings(upgrades: readonly UpgradeId[]): ToppingId[] {
 
 export function availableFastDrinks(upgrades: readonly UpgradeId[]): FastDrinkId[] {
   return FAST_DRINKS.filter((drink) => upgrades.includes(drink));
+}
+
+export function availableCinnamonGlazes(upgrades: readonly UpgradeId[]): CinnamonGlazeId[] {
+  const glazes: CinnamonGlazeId[] = [];
+  if (upgrades.includes("rollOven")) glazes.push("vanillaGlaze");
+  if (upgrades.includes("chocolateIcing")) glazes.push("chocolateGlaze");
+  if (upgrades.includes("berryIcing")) glazes.push("berryGlaze");
+  return glazes;
 }
 
 export function maxCustomers(upgrades: readonly UpgradeId[]): number {
@@ -344,16 +477,24 @@ export function generateTicket(
   rng: () => number = Math.random,
 ): OrderItem[] {
   const itemCount = ticketItemCount(elapsedMs, kind, rng);
-  const products: Array<"iceCream" | FastDrinkId | "bubbleTea"> = ["iceCream", ...availableFastDrinks(upgrades)];
+  const products: Array<"iceCream" | FastDrinkId | "bubbleTea" | "cinnamonRoll"> = ["iceCream", ...availableFastDrinks(upgrades)];
   if (upgrades.includes("bubbleTea")) products.push("bubbleTea");
+  const cinnamonGlazes = availableCinnamonGlazes(upgrades);
+  if (cinnamonGlazes.length > 0) products.push("cinnamonRoll");
   let bubbleUsed = false;
+  let cinnamonUsed = false;
   return Array.from({ length: itemCount }, () => {
-    const pool = bubbleUsed ? products.filter((product) => product !== "bubbleTea") : products;
+    const pool = products.filter((product) =>
+      (!bubbleUsed || product !== "bubbleTea") && (!cinnamonUsed || product !== "cinnamonRoll"));
     const product = pick(pool, rng);
     if (product === "iceCream") return generateIceCreamOrder(upgrades, kind, rng);
     if (product === "bubbleTea") {
       bubbleUsed = true;
       return { type: "bubbleTea" };
+    }
+    if (product === "cinnamonRoll") {
+      cinnamonUsed = true;
+      return { type: "cinnamonRoll", glaze: pick(cinnamonGlazes, rng) };
     }
     return { type: "fastDrink", drink: product };
   });
@@ -361,6 +502,7 @@ export function generateTicket(
 
 export function requiredActions(item: OrderItem): number {
   if (item.type === "iceCream") return 1 + item.scoops.length + (item.topping ? 1 : 0);
+  if (item.type === "cinnamonRoll") return 2;
   return item.type === "bubbleTea" ? 3 : 1;
 }
 
@@ -372,6 +514,9 @@ export function buildToItem(build: BuildState): OrderItem | undefined {
   if (build.type === "bubbleTea" && BUBBLE_STEPS.every((step, index) => build.bubbleSteps[index] === step)) {
     return { type: "bubbleTea" };
   }
+  if (build.type === "cinnamonRoll" && build.cinnamonRoll && build.cinnamonGlaze) {
+    return { type: "cinnamonRoll", glaze: build.cinnamonGlaze };
+  }
   return undefined;
 }
 
@@ -380,13 +525,15 @@ export function itemToBuild(item: OrderItem): BuildState {
     return { type: "iceCream", base: item.base, scoops: [...item.scoops], topping: item.topping, bubbleSteps: [] };
   }
   if (item.type === "fastDrink") return { type: "fastDrink", drink: item.drink, scoops: [], bubbleSteps: [] };
-  return { type: "bubbleTea", scoops: [], bubbleSteps: [...BUBBLE_STEPS] };
+  if (item.type === "bubbleTea") return { type: "bubbleTea", scoops: [], bubbleSteps: [...BUBBLE_STEPS] };
+  return { type: "cinnamonRoll", scoops: [], bubbleSteps: [], cinnamonRoll: true, cinnamonGlaze: item.glaze };
 }
 
 export function itemMatches(actual: OrderItem, expected: OrderItem): boolean {
   if (actual.type !== expected.type) return false;
   if (actual.type === "fastDrink" && expected.type === "fastDrink") return actual.drink === expected.drink;
   if (actual.type === "bubbleTea") return true;
+  if (actual.type === "cinnamonRoll" && expected.type === "cinnamonRoll") return actual.glaze === expected.glaze;
   if (actual.type !== "iceCream" || expected.type !== "iceCream") return false;
   return (
     actual.base === expected.base &&
@@ -396,27 +543,15 @@ export function itemMatches(actual: OrderItem, expected: OrderItem): boolean {
   );
 }
 
-export interface SubmissionResult {
-  allCorrect: boolean;
-  correct: boolean[];
-  partialCoins: number;
-  livesLost: number;
-}
-
-export function evaluateSubmission(
-  ticket: readonly OrderItem[],
-  prepared: readonly (OrderItem | null)[],
-  kind: CustomerKind,
-): SubmissionResult {
-  const correct = ticket.map((expected, index) => {
-    const actual = prepared[index];
-    return Boolean(actual && itemMatches(actual, expected));
-  });
-  const allCorrect = correct.length === ticket.length && correct.every(Boolean);
-  const partialCoins = allCorrect
-    ? 0
-    : ticket.reduce((total, item, index) => total + (correct[index] ? itemBaseValue(item) : 0), 0);
-  return { allCorrect, correct, partialCoins, livesLost: !allCorrect && kind === "critic" ? 2 : 0 };
+export function findMatchingItemIndex(
+  remainingTicket: readonly OrderItem[],
+  actual: OrderItem,
+  preferredIndex = 0,
+): number {
+  if (preferredIndex >= 0 && preferredIndex < remainingTicket.length && itemMatches(actual, remainingTicket[preferredIndex]!)) {
+    return preferredIndex;
+  }
+  return remainingTicket.findIndex((expected) => itemMatches(actual, expected));
 }
 
 export function timeoutLivesLost(kind: CustomerKind): number {
@@ -432,7 +567,18 @@ export function nextCombo(current: number, remainingRatio: number, isVip: boolea
 export function itemBaseValue(item: OrderItem): number {
   if (item.type === "fastDrink") return item.drink === "berrySoda" ? 14 : 10;
   if (item.type === "bubbleTea") return 22;
+  if (item.type === "cinnamonRoll") {
+    return item.glaze === "berryGlaze" ? 24 : item.glaze === "chocolateGlaze" ? 21 : 18;
+  }
   return 8 + item.scoops.length * 3 + (item.base === "cone" ? 0 : 2) + (item.topping ? 4 : 0);
+}
+
+export function partialServedValue(servedItems: readonly OrderItem[]): number {
+  return servedItems.reduce((total, item) => total + itemBaseValue(item), 0);
+}
+
+export function wrongServeRemainingMs(remainingMs: number, maxPatienceMs: number): number {
+  return Math.max(0, remainingMs - maxPatienceMs * 0.35);
 }
 
 export interface RewardResult {
@@ -447,7 +593,7 @@ export function calculateReward(ticket: readonly OrderItem[], kind: CustomerKind
   const base = ticket.reduce((total, item) => total + itemBaseValue(item), 0) + Math.max(0, ticket.length - 1) * 5;
   const ratio = Math.max(0, Math.min(1, remainingRatio));
   const tip = Math.floor(base * ratio * 0.5);
-  const vipMultiplier = kind === "critic" ? 5 : kind === "patient" ? 3 : 1;
+  const vipMultiplier = kind === "critic" ? 2 : kind === "patient" ? 1.5 : 1;
   const coins = Math.floor((base + tip) * combo * vipMultiplier);
   const actions = ticket.reduce((total, item) => total + requiredActions(item), 0);
   const xp = Math.round((10 + actions * 5 + ticket.length * 4 + ratio * 20) * combo * vipMultiplier);

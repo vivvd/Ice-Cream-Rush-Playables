@@ -1,6 +1,6 @@
 # Ice Cream Rush
 
-An endless time-management game built as a lightweight YouTube Playable. Fill one-to-three-item tickets with custom ice cream, quick sodas, and Bubble Tea before patience runs out. Coins and upgrades persist through YouTube cloud save.
+A campaign and endless time-management game built as a lightweight YouTube Playable. Clear 25 timed shifts by reaching each cash goal, then unlock Endless for score mastery. Build and serve one-to-three-item tickets product by product—custom ice cream, quick sodas, Bubble Tea, and two-step Cinnamon Rolls—before patience runs out. Cash, SaveV5 run snapshots, level progress, and upgrades persist through YouTube cloud save.
 
 ## Commands
 

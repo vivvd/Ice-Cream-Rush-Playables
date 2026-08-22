@@ -2,9 +2,14 @@ interface Window {
   __ICE_CREAM_RUSH_DEBUG__?: {
     unlockAll: () => void;
     forceGameOver: (elapsedMs?: number) => void;
+    forceLevelWin: () => void;
+    forceLevelTimeout: () => void;
+    unlockCampaign: (completedThrough?: number) => void;
     setPatience: (ratio?: number) => void;
     setStoreState: (coins?: number) => void;
     setDemoTicket: () => void;
+      setCinnamonTicket: () => void;
+      setTallIceTicket: () => void;
     snapshot: () => unknown;
   };
   ytgame?: {

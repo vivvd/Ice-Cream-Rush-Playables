@@ -3,9 +3,11 @@ export type FlavorId = "vanilla" | "chocolate" | "strawberry" | "mint";
 export type ToppingId = "sprinkles" | "drizzle";
 export type FastDrinkId = "lemonade" | "berrySoda";
 export type DrinkComponentId = "teaCup" | "milkTea" | "pearls";
+export type CinnamonGlazeId = "vanillaGlaze" | "chocolateGlaze" | "berryGlaze";
 export type CustomerKind = "regular" | "patient" | "critic";
-export type ProductKind = "iceCream" | "fastDrink" | "bubbleTea";
-export type UpgradeTrack = "iceCream" | "drinks" | "equipment";
+export type ProductKind = "iceCream" | "fastDrink" | "bubbleTea" | "cinnamonRoll";
+export type UpgradeTrack = "iceCream" | "drinks" | "bakery" | "equipment";
+export type RunMode = "level" | "endless";
 
 export type UpgradeId =
   | "strawberry"
@@ -17,6 +19,9 @@ export type UpgradeId =
   | "lemonade"
   | "berrySoda"
   | "bubbleTea"
+  | "rollOven"
+  | "chocolateIcing"
+  | "berryIcing"
   | "freezer"
   | "counter1"
   | "autobase"
@@ -38,7 +43,12 @@ export interface BubbleTeaOrder {
   type: "bubbleTea";
 }
 
-export type OrderItem = IceCreamOrder | FastDrinkOrder | BubbleTeaOrder;
+export interface CinnamonRollOrder {
+  type: "cinnamonRoll";
+  glaze: CinnamonGlazeId;
+}
+
+export type OrderItem = IceCreamOrder | FastDrinkOrder | BubbleTeaOrder | CinnamonRollOrder;
 
 export interface BuildState {
   type?: ProductKind;
@@ -47,13 +57,15 @@ export interface BuildState {
   topping?: ToppingId;
   drink?: FastDrinkId;
   bubbleSteps: DrinkComponentId[];
+  cinnamonRoll?: boolean;
+  cinnamonGlaze?: CinnamonGlazeId;
 }
 
 export interface CustomerState {
   id: number;
   kind: CustomerKind;
-  ticket: OrderItem[];
-  prepared: Array<OrderItem | null>;
+  remainingTicket: OrderItem[];
+  servedItems: OrderItem[];
   activeItemIndex: number;
   build: BuildState;
   maxPatienceMs: number;
@@ -63,6 +75,8 @@ export interface CustomerState {
 
 export interface RunState {
   active: boolean;
+  mode: RunMode;
+  levelNumber?: number;
   lives: number;
   xp: number;
   combo: number;
@@ -79,27 +93,38 @@ export interface RunState {
   tutorial: boolean;
 }
 
+export interface CampaignProgress {
+  completedThrough: number;
+  bestEarnings: number[];
+  endlessUnlocked: boolean;
+}
+
 export interface SaveSettings {
   music: boolean;
   sfx: boolean;
   reducedMotion: boolean;
 }
 
-export interface SaveV2 {
-  version: 2;
+export interface SaveV5 {
+  version: 5;
   coins: number;
   upgrades: UpgradeId[];
   tutorialComplete: boolean;
+  bakeryTutorialComplete: boolean;
   bestScore: number;
   settings: SaveSettings;
+  campaign: CampaignProgress;
   activeRun: RunState | null;
 }
+
+export type RunResult = "endlessFailed" | "levelWon" | "levelFailedLives" | "levelFailedTime";
 
 export type IngredientSelection =
   | { type: "base"; id: BaseId }
   | { type: "flavor"; id: FlavorId }
   | { type: "topping"; id: ToppingId }
   | { type: "fastDrink"; id: FastDrinkId }
-  | { type: "bubble"; id: DrinkComponentId };
+  | { type: "bubble"; id: DrinkComponentId }
+  | { type: "cinnamon"; id: "roll" | CinnamonGlazeId };
 
 export type AdState = "idle" | "requesting" | "showing" | "completed" | "dismissed" | "failed";

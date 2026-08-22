@@ -1,7 +1,8 @@
-import { COLORS, LABELS } from "./config";
+import { LABELS } from "./config";
 import type {
   BaseId,
   BuildState,
+  CinnamonGlazeId,
   CustomerKind,
   DrinkComponentId,
   FastDrinkId,
@@ -12,77 +13,76 @@ import type {
   UpgradeId,
 } from "./types";
 
-const sprinklePieces = Array.from({ length: 18 }, (_, index) => `<i style="--piece:${index}"></i>`).join("");
+const ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
+
+const productAsset = (name: string) => `${ASSET_ROOT}/products/${name}.webp`;
+const equipmentAsset = (name: string) => `${ASSET_ROOT}/equipment/${name}.webp`;
+const characterAsset = (name: string) => `${ASSET_ROOT}/characters/${name}.webp`;
 
 export function dessertHtml(dessert: Pick<BuildState, "base" | "scoops" | "topping"> | IceCreamOrder, compact = false): string {
-  const hasBase = Boolean(dessert.base);
   const topIndex = dessert.scoops.length - 1;
-  const topping = dessert.topping
-    ? `<span class="dessert-topping topping-${dessert.topping}">${dessert.topping === "sprinkles" ? sprinklePieces : ""}</span>`
-    : "";
-  const scoops = dessert.scoops
-    .map(
-      (flavor, index) =>
-        `<span class="dessert-scoop ${index === topIndex ? "is-top-scoop" : ""}" style="--scoop:${COLORS[flavor]};--stack:${index}" title="${LABELS[flavor]}">${index === topIndex ? topping : ""}</span>`,
-    )
-    .join("");
-  const base = hasBase ? `<span class="dessert-base base-${dessert.base}"></span>` : `<span class="dessert-base-placeholder"></span>`;
-  return `<span class="dessert ${compact ? "dessert-compact" : ""} scoops-${dessert.scoops.length}" aria-hidden="true">${scoops}${base}</span>`;
+  const scoops = dessert.scoops.map((flavor, index) => {
+    const topping = index === topIndex && dessert.topping
+      ? `<img class="dessert-topping topping-${dessert.topping}" src="${productAsset(dessert.topping)}" alt="" draggable="false">`
+      : "";
+    return `<span class="dessert-scoop ${index === topIndex ? "is-top-scoop" : ""}" style="--stack:${index}" title="${LABELS[flavor]}"><img src="${productAsset(flavor)}" alt="" draggable="false">${topping}</span>`;
+  }).join("");
+  const base = dessert.base
+    ? `<img class="dessert-base base-${dessert.base}" src="${productAsset(dessert.base)}" alt="" draggable="false">`
+    : `<span class="dessert-base-placeholder"></span>`;
+  return `<span class="dessert imagegen-dessert ${compact ? "dessert-compact" : ""} scoops-${dessert.scoops.length}" aria-hidden="true">${scoops}${base}</span>`;
 }
 
 export function productHtml(product: OrderItem | BuildState, compact = false): string {
   if (!product.type || product.type === "iceCream") return dessertHtml(product, compact);
-  if (product.type === "fastDrink") return drinkHtml(product.drink, 1, compact);
+  if (product.type === "fastDrink") return drinkHtml(product.drink ?? "lemonade", compact);
+  if (product.type === "cinnamonRoll") {
+    const glaze = "glaze" in product ? product.glaze : product.cinnamonGlaze;
+    return cinnamonRollHtml(glaze, compact);
+  }
   const progress = "bubbleSteps" in product ? product.bubbleSteps.length : 3;
-  return drinkHtml("bubbleTea", progress, compact);
+  const asset = progress <= 1 ? "tea-cup" : progress === 2 ? "milk-tea" : "bubble-tea";
+  return drinkHtml(asset, compact);
 }
 
-function drinkHtml(drink: FastDrinkId | "bubbleTea" | undefined, progress: number, compact: boolean): string {
-  const kind = drink ?? "lemonade";
-  const fill = kind === "bubbleTea" ? Math.max(0, Math.min(3, progress)) : 1;
-  const liquidFill = kind === "bubbleTea" ? (fill >= 2 ? 74 : 0) : 74;
-  return `<span class="drink-cup drink-${kind} bubble-progress-${fill} ${compact ? "drink-compact" : ""}" style="--drink-fill:${liquidFill}%" aria-hidden="true">
-    <i class="drink-lid"></i><i class="drink-liquid"></i><i class="drink-pearls"></i><i class="drink-straw"></i>
-  </span>`;
+function cinnamonRollHtml(glaze: CinnamonGlazeId | undefined, compact: boolean): string {
+  const suffix = glaze ? `-${glaze.replace("Glaze", "")}` : "";
+  return `<span class="cinnamon-roll-product imagegen-cinnamon ${compact ? "cinnamon-compact" : ""}" aria-hidden="true"><img src="${productAsset(`cinnamon-roll${suffix}`)}" alt="" draggable="false"></span>`;
+}
+
+function drinkHtml(drink: FastDrinkId | "tea-cup" | "milk-tea" | "bubble-tea", compact: boolean): string {
+  const asset = drink === "berrySoda" ? "berry-soda" : drink;
+  return `<span class="drink-cup imagegen-drink ${compact ? "drink-compact" : ""}" aria-hidden="true"><img src="${productAsset(asset)}" alt="" draggable="false"></span>`;
 }
 
 export function orderItemIconsHtml(order: OrderItem): string {
-  if (order.type === "fastDrink") {
-    return `<span class="order-sequence"><span class="order-token drink-token drink-token-${order.drink}" title="${LABELS[order.drink]}"><i></i></span></span>`;
-  }
-  if (order.type === "bubbleTea") {
-    return `<span class="order-sequence"><span class="order-token drink-token drink-token-bubbleTea" title="Bubble Tea"><i></i></span></span>`;
-  }
-  const scoops = order.scoops
-    .map(
-      (flavor) =>
-        `<span class="order-token scoop-token" style="--token:${COLORS[flavor]}" title="${LABELS[flavor]}"><i></i></span>`,
-    )
-    .join("");
-  const topping = order.topping
-    ? `<span class="order-token topping-token topping-token-${order.topping}" title="${LABELS[order.topping]}"><i></i></span>`
-    : "";
-  return `<span class="order-sequence"><span class="order-token base-token base-token-${order.base}" title="${LABELS[order.base]}"><i></i></span>${scoops}${topping}</span>`;
+  const title = order.type === "fastDrink"
+    ? LABELS[order.drink]
+    : order.type === "bubbleTea"
+      ? "Bubble Tea"
+      : order.type === "cinnamonRoll" ? `${LABELS[order.glaze]} Cinnamon Roll` : "Ice Cream";
+  return `<span class="order-sequence order-product-preview" title="${title}">${productHtml(order, true)}</span>`;
 }
 
-export function ticketMiniHtml(ticket: readonly OrderItem[]): string {
-  return `<span class="ticket-mini">${ticket.map((item) => `<i class="ticket-mini-item type-${item.type}">${orderItemIconsHtml(item)}</i>`).join("")}</span>`;
+export function ticketMiniHtml(ticket: readonly OrderItem[], activeIndex = 0): string {
+  return `<span class="ticket-mini items-${ticket.length}">${ticket.map((item, index) => `<i class="ticket-mini-item type-${item.type} ${index === activeIndex ? "is-active" : ""}" data-ticket-index="${index}">${orderItemIconsHtml(item)}</i>`).join("")}</span>`;
 }
 
 export function ingredientIcon(
-  kind: "base" | "flavor" | "topping" | "fastDrink" | "bubble",
-  id: BaseId | FlavorId | ToppingId | FastDrinkId | DrinkComponentId,
+  kind: "base" | "flavor" | "topping" | "fastDrink" | "bubble" | "cinnamon",
+  id: BaseId | FlavorId | ToppingId | FastDrinkId | DrinkComponentId | CinnamonGlazeId | "roll",
 ): string {
-  if (kind === "flavor") {
-    const flavor = id as FlavorId;
-    return `<span class="ingredient-art scoop-art" style="--flavor:${COLORS[flavor]}"><i></i></span>`;
-  }
-  if (kind === "base") return `<span class="ingredient-art base-art base-art-${id}"><i></i></span>`;
-  if (kind === "topping") {
-    return `<span class="ingredient-art topping-art topping-art-${id}"><i>${id === "sprinkles" ? sprinklePieces : ""}</i></span>`;
-  }
-  if (kind === "fastDrink") return `<span class="ingredient-art drink-art drink-art-${id}"><i></i></span>`;
-  return `<span class="ingredient-art bubble-art bubble-art-${id}"><i></i></span>`;
+  const names: Record<string, string> = {
+    berrySoda: "berry-soda",
+    teaCup: "tea-cup",
+    milkTea: "milk-tea",
+    pearls: "pearls",
+    roll: "cinnamon-roll",
+    vanillaGlaze: "cinnamon-roll-vanilla",
+    chocolateGlaze: "cinnamon-roll-chocolate",
+    berryGlaze: "cinnamon-roll-berry",
+  };
+  return `<span class="ingredient-art imagegen-ingredient kind-${kind}"><img src="${productAsset(names[id] ?? id)}" alt="" draggable="false"></span>`;
 }
 
 export function upgradeIcon(id: UpgradeId): string {
@@ -98,34 +98,49 @@ export function upgradeIcon(id: UpgradeId): string {
   };
   const mapped = ingredientMap[id];
   if (mapped) return ingredientIcon(mapped[0], mapped[1]);
-  if (id === "bubbleTea") return `<span class="ingredient-art upgrade-art upgrade-bubble"><i></i></span>`;
-  return `<span class="equipment-art equipment-${id}"><i></i></span>`;
+  if (id === "bubbleTea") return `<span class="ingredient-art imagegen-ingredient"><img src="${productAsset("bubble-tea")}" alt="" draggable="false"></span>`;
+  if (id === "rollOven") return ingredientIcon("cinnamon", "roll");
+  if (id === "chocolateIcing") return ingredientIcon("cinnamon", "chocolateGlaze");
+  if (id === "berryIcing") return ingredientIcon("cinnamon", "berryGlaze");
+  return `<span class="equipment-art imagegen-equipment"><img src="${equipmentAsset(id)}" alt="" draggable="false"></span>`;
 }
 
 export function customerSvg(kind: CustomerKind, variant: number): string {
-  const skin = ["#8b553d", "#f1bd91", "#c98663", "#ffd5b5", "#6e402f", "#dca77f"][variant % 6];
-  const hair = ["#402f3a", "#80523d", "#24233d", "#d58c46", "#5d3546", "#303c55"][variant % 6];
-  const shirt = ["#7059d9", "#1fa9a4", "#f45b78", "#ef9e32", "#4c76d9", "#9a62d0"][variant % 6];
-  const accessory = kind === "critic"
-    ? `<path d="M49 76h25M86 76h25" stroke="#342d42" stroke-width="5"/><rect x="45" y="67" width="34" height="23" rx="8" fill="none" stroke="#342d42" stroke-width="5"/><rect x="81" y="67" width="34" height="23" rx="8" fill="none" stroke="#342d42" stroke-width="5"/>`
-    : kind === "patient"
-      ? `<path d="M121 58l10-13 7 17" fill="#ffd65a" stroke="#342d42" stroke-width="4" stroke-linejoin="round"/>`
-      : "";
-  return `<svg viewBox="0 0 160 176" role="img" aria-label="${kind === "regular" ? "Customer" : `${kind} VIP customer`}">
-    <ellipse cx="80" cy="160" rx="56" ry="15" fill="#392c4d" opacity=".14"/>
-    <path d="M35 161c2-42 18-61 45-61s44 19 46 61" fill="${shirt}" stroke="#342d42" stroke-width="6" stroke-linejoin="round"/>
-    <path d="M61 114h38v28c-8 9-30 9-38 0z" fill="${skin}" stroke="#342d42" stroke-width="5"/>
-    <ellipse cx="80" cy="70" rx="46" ry="51" fill="${skin}" stroke="#342d42" stroke-width="6"/>
-    <path d="M38 66c-5-30 14-52 42-52 33 0 49 24 43 55-10-15-19-20-31-28-9 15-29 24-54 25z" fill="${hair}" stroke="#342d42" stroke-width="6" stroke-linejoin="round"/>
-    <g class="face-eyes"><circle cx="62" cy="76" r="5" fill="#342d42"/><circle cx="98" cy="76" r="5" fill="#342d42"/></g>
-    <g class="face-worried"><path d="M54 68l14 3M92 71l14-3" fill="none" stroke="#342d42" stroke-width="4" stroke-linecap="round"/><path d="M68 97h24" fill="none" stroke="#342d42" stroke-width="5" stroke-linecap="round"/></g>
-    <g class="face-angry"><path d="M53 71l15-6M92 65l15 6" fill="none" stroke="#342d42" stroke-width="5" stroke-linecap="round"/><path d="M67 101c8-8 18-8 26 0" fill="none" stroke="#342d42" stroke-width="5" stroke-linecap="round"/></g>
-    <path class="face-happy" d="M68 95c8 7 16 7 24 0" fill="none" stroke="#342d42" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="52" cy="90" r="7" fill="#f07982" opacity=".38"/><circle cx="108" cy="90" r="7" fill="#f07982" opacity=".38"/>
-    ${accessory}
-  </svg>`;
+  const count = kind === "regular" ? 4 : 2;
+  const identity = `${kind}-${variant % count}`;
+  const label = kind === "regular" ? "Customer" : `${kind} VIP customer`;
+  return `<span class="customer-sprite" role="img" aria-label="${label}">
+    <img class="mood-sprite mood-happy" src="${characterAsset(`${identity}-happy`)}" alt="" draggable="false">
+    <img class="mood-sprite mood-worried" src="${characterAsset(`${identity}-worried`)}" alt="" draggable="false">
+    <img class="mood-sprite mood-angry" src="${characterAsset(`${identity}-angry`)}" alt="" draggable="false">
+    <img class="mood-sprite mood-urgent" src="${characterAsset(`${identity}-urgent`)}" alt="" draggable="false">
+  </span>`;
 }
 
 export function heartSvg(filled: boolean): string {
-  return `<svg viewBox="0 0 40 36" aria-hidden="true"><path d="M20 33S3 23 3 11C3 3 13 0 20 8c7-8 17-5 17 3 0 12-17 22-17 22z" fill="${filled ? "#ff4f75" : "#eadde5"}" stroke="#5a3f5e" stroke-width="3"/></svg>`;
+  const fill = filled ? "#ff5f87" : "#eee4e9";
+  const shade = filled ? "#dc365f" : "#d8cbd3";
+  return `<svg class="heart-icon ${filled ? "is-filled" : "is-empty"}" viewBox="-3 -3 54 50" overflow="visible" aria-hidden="true">
+    <path d="M24 40C17 35 5 27 5 15 5 7 10 3 17 3c4 0 7 2 9 6 2-4 5-6 9-6 7 0 12 5 12 12 0 12-12 20-23 25z" fill="${shade}" opacity=".38" transform="translate(0 2)"/>
+    <path d="M24 38C16 33 4 25 4 14 4 6 10 2 17 2c4 0 7 2 9 7 2-5 5-7 9-7 7 0 13 5 13 12 0 11-12 19-24 24z" fill="${fill}" stroke="#49334f" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M11 13c1-4 4-6 8-6" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" opacity="${filled ? ".72" : ".55"}"/>
+  </svg>`;
+}
+
+export function cashSvg(): string {
+  return `<svg class="cash-svg" viewBox="0 0 52 38" aria-hidden="true">
+    <rect x="2" y="5" width="48" height="28" rx="7" fill="#70d6ae" stroke="#49334f" stroke-width="3"/>
+    <path d="M8 12c4 0 6-2 7-4h22c1 2 3 4 7 4v14c-4 0-6 2-7 4H15c-1-2-3-4-7-4z" fill="#bdf0d6" stroke="#3d806b" stroke-width="2"/>
+    <circle cx="26" cy="19" r="7" fill="#fff6c4" stroke="#49334f" stroke-width="2"/>
+    <path d="M29 15.5c-1-1-5-1.2-5 1 0 2.4 5.6 1.1 5.6 4 0 2.2-4 2.5-6 1M26.5 13.7v10.6" fill="none" stroke="#49334f" stroke-width="2" stroke-linecap="round"/>
+  </svg>`;
+}
+
+export function resetSvg(): string {
+  return `<svg class="reset-svg" viewBox="0 0 48 48" aria-hidden="true">
+    <path d="M13 17a15 15 0 1 1-2 17" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M7 8v12h12" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 16l-9 4" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="26" cy="25" r="5" fill="#ffcf61" stroke="currentColor" stroke-width="2.5"/>
+  </svg>`;
 }

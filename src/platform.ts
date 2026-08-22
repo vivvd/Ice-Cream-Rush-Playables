@@ -1,4 +1,4 @@
-import type { SaveV2 } from "./types";
+import type { SaveV5 } from "./types";
 
 interface PlatformCallbacks {
   onAudioChange: (enabled: boolean) => void;
@@ -69,7 +69,7 @@ export class YouTubePlatform {
     }
   }
 
-  async saveData(save: SaveV2): Promise<void> {
+  async saveData(save: SaveV5): Promise<void> {
     if (!this.loaded) throw new Error("saveData called before loadData completed");
     const serialized = JSON.stringify(save);
     try {

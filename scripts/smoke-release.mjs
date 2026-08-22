@@ -73,11 +73,11 @@ try {
   });
 
   await page.goto(url, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "PLAY NOW" }).click();
+  await page.getByRole("button", { name: "CHOOSE DAY" }).click();
+  await page.getByRole("button", { name: /Start Day 1,/ }).click();
   await page.getByRole("button", { name: "Add Cone" }).click();
   await page.getByRole("button", { name: "Add Vanilla" }).click();
-  await page.getByRole("button", { name: "ADD TO TRAY" }).click();
-  await page.getByRole("button", { name: "SERVE ORDER" }).click();
+  await page.getByRole("button", { name: "SERVE" }).click();
   const calls = await page.evaluate(() => window.__calls);
   if (JSON.stringify(calls) !== JSON.stringify(["first", "load", "ready"])) errors.push(`SDK order: ${JSON.stringify(calls)}`);
   if (await page.getByText("FIRST ORDER").count()) errors.push("Tutorial did not complete");
