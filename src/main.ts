@@ -1302,7 +1302,8 @@ class IceCreamRushApp {
     feedback.textContent = message;
     feedback.className = `feedback is-visible feedback-${tone}`;
     if (this.feedbackTimer !== undefined) window.clearTimeout(this.feedbackTimer);
-    this.feedbackTimer = window.setTimeout(() => feedback.classList.remove("is-visible"), 1_700);
+    const visibleFor = tone === "success" || tone === "fast" ? 3_200 : 1_700;
+    this.feedbackTimer = window.setTimeout(() => feedback.classList.remove("is-visible"), visibleFor);
   }
 
   private render(): void {
