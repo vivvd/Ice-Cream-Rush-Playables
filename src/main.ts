@@ -736,7 +736,6 @@ class IceCreamRushApp {
       }
     }
     this.audio.play("tap");
-    this.refreshRewardFeedback();
     this.render();
   }
 
@@ -1313,14 +1312,6 @@ class IceCreamRushApp {
     this.feedbackTimer = window.setTimeout(() => this.clearFeedback(), visibleFor);
   }
 
-  private refreshRewardFeedback(): void {
-    const feedback = this.feedbackState;
-    if (!feedback || (feedback.tone !== "success" && feedback.tone !== "fast")) return;
-    feedback.expiresAt = Date.now() + 3_000;
-    if (this.feedbackTimer !== undefined) window.clearTimeout(this.feedbackTimer);
-    this.feedbackTimer = window.setTimeout(() => this.clearFeedback(), 3_000);
-  }
-
   private clearFeedback(): void {
     this.feedbackState = undefined;
     this.feedbackTimer = undefined;
@@ -1337,13 +1328,18 @@ class IceCreamRushApp {
 
   private render(): void {
     const tray = this.root.querySelector<HTMLElement>(".ingredient-tray");
+    const feedback = this.screen === "gameplay" ? this.root.querySelector<HTMLElement>("#feedback") : undefined;
     if (tray) this.ingredientTrayScrollLeft = tray.scrollLeft;
     this.root.classList.toggle("reduce-motion", this.save?.settings.reducedMotion ?? false);
     if (this.screen === "menu") this.renderMenu();
     else if (this.screen === "levels") this.renderLevelSelect();
     else if (this.screen === "result") this.renderResult();
     else this.renderGameplay();
-    if (this.screen === "gameplay") this.restoreFeedback();
+    if (this.screen === "gameplay") {
+      const renderedFeedback = this.root.querySelector<HTMLElement>("#feedback");
+      if (feedback && renderedFeedback) renderedFeedback.replaceWith(feedback);
+      this.restoreFeedback();
+    }
   }
 
   private renderMenu(): void {
