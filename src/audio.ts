@@ -3,7 +3,25 @@ import type { SaveSettings } from "./types";
 type SfxName = "tap" | "success" | "fast" | "wrong" | "timeout" | "purchase" | "unlock";
 type AudioBus = "music" | "sfx";
 
-const MUSIC_STEP_MS = 300;
+const MUSIC_STEP_MS = 340;
+
+// A 44-second original café-pop arrangement. Eight distinct eight-bar
+// sections avoid the short, mechanical loop a one-phrase sequencer creates.
+const CAFE_SCALE = [261.63, 293.66, 329.63, 392, 440, 493.88, 523.25, 587.33, 659.25, 783.99, 880] as const;
+const CAFE_MELODY = [
+  [4, 5, 6, 7, 6, 5, 4, -1, 3, 4, 5, 6, 5, 4, 3, -1],
+  [2, 3, 4, 5, 4, 3, 2, -1, 1, 2, 3, 4, 5, 4, 3, -1],
+  [5, 6, 7, 8, 7, 6, 5, -1, 4, 5, 6, 7, 8, 7, 6, -1],
+  [4, 3, 2, 3, 4, 5, 4, -1, 2, 3, 4, 5, 4, 3, 2, -1],
+  [6, 7, 8, 9, 8, 7, 6, -1, 5, 6, 7, 8, 7, 6, 5, -1],
+  [4, 5, 6, 7, 6, 5, 4, -1, 3, 5, 7, 8, 7, 5, 4, -1],
+  [3, 4, 5, 6, 5, 4, 3, -1, 2, 4, 6, 7, 6, 4, 3, -1],
+  [5, 6, 8, 9, 8, 6, 5, -1, 4, 5, 6, 7, 6, 5, 4, -1],
+] as const;
+const CAFE_CHORDS = [
+  [261.63, 329.63, 392], [220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66],
+  [261.63, 329.63, 392], [220, 261.63, 329.63], [293.66, 369.99, 440], [196, 246.94, 293.66],
+] as const;
 
 export class GameAudio {
   private context?: AudioContext;
@@ -15,7 +33,6 @@ export class GameAudio {
   private paused = false;
   private settings: SaveSettings = { music: true, sfx: true, reducedMotion: false };
   private musicStep = 0;
-  private noiseBuffer?: AudioBuffer;
 
   setSettings(settings: SaveSettings): void {
     this.settings = { ...settings };
@@ -26,17 +43,29 @@ export class GameAudio {
   setPlatformEnabled(enabled: boolean): void {
     this.platformEnabled = enabled;
     if (!enabled) void this.context?.suspend();
-    else if (!this.paused && this.context?.state === "suspended") void this.context.resume();
+    else if (!this.paused && this.context?.state === "suspended") {
+      void this.context.resume().then(() => {
+        this.syncBusLevels();
+        this.syncMusic();
+      }).catch(() => undefined);
+    }
     this.syncBusLevels();
     this.syncMusic();
   }
 
-  async unlock(): Promise<void> {
+  unlock(): void {
     if (!this.context) {
       this.context = new AudioContext();
       this.createAudioGraph();
     }
-    if (this.platformEnabled && !this.paused && this.context.state === "suspended") await this.context.resume();
+    // This must stay synchronous with the input event. Some mobile WebViews
+    // reject audio that is started only after an awaited microtask.
+    if (this.platformEnabled && !this.paused && this.context.state === "suspended") {
+      void this.context.resume().then(() => {
+        this.syncBusLevels();
+        this.syncMusic();
+      }).catch(() => undefined);
+    }
     this.syncBusLevels();
     this.syncMusic();
   }
@@ -49,7 +78,12 @@ export class GameAudio {
 
   resume(): void {
     this.paused = false;
-    if (this.platformEnabled) void this.context?.resume();
+    if (this.platformEnabled && this.context?.state === "suspended") {
+      void this.context.resume().then(() => {
+        this.syncBusLevels();
+        this.syncMusic();
+      }).catch(() => undefined);
+    }
     this.syncBusLevels();
     this.syncMusic();
   }
@@ -67,7 +101,7 @@ export class GameAudio {
 
   play(name: SfxName): void {
     const context = this.context;
-    if (!context || !this.platformEnabled || !this.settings.sfx || this.paused) return;
+    if (!context || context.state !== "running" || !this.platformEnabled || !this.settings.sfx || this.paused) return;
     const now = context.currentTime + 0.006;
 
     switch (name) {
@@ -77,12 +111,12 @@ export class GameAudio {
         break;
       case "success":
         this.arpeggio([523.25, 659.25, 783.99, 1046.5], now, 0.052, 0.18, 0.105, "triangle");
-        this.percussion(now + 0.16, 0.08, 0.055, 5200, "sfx");
+        this.voice(1318.51, 1320, "sine", now + 0.17, 0.11, 0.025, "sfx");
         break;
       case "fast":
         this.arpeggio([659.25, 783.99, 987.77, 1318.51], now, 0.052, 0.19, 0.105, "sine");
         this.arpeggio([987.77, 1174.66, 1567.98], now + 0.11, 0.045, 0.14, 0.045, "triangle");
-        this.percussion(now + 0.22, 0.1, 0.06, 7000, "sfx");
+        this.voice(1760, 1762, "sine", now + 0.23, 0.1, 0.026, "sfx");
         break;
       case "wrong":
         this.voice(245, 118, "sawtooth", now, 0.24, 0.11, "sfx");
@@ -95,13 +129,13 @@ export class GameAudio {
       case "purchase":
         this.voice(920, 1240, "triangle", now, 0.075, 0.08, "sfx");
         this.voice(1220, 1760, "sine", now + 0.07, 0.12, 0.085, "sfx");
-        this.percussion(now + 0.04, 0.055, 0.05, 6400, "sfx");
+        this.voice(1480, 1482, "sine", now + 0.13, 0.08, 0.018, "sfx");
         break;
       case "unlock":
         this.arpeggio([523.25, 659.25, 783.99, 987.77, 1318.51], now, 0.075, 0.34, 0.1, "triangle");
         this.voice(261.63, 263, "sine", now, 0.72, 0.05, "sfx");
         this.voice(392, 396, "sine", now + 0.2, 0.56, 0.045, "sfx");
-        this.percussion(now + 0.31, 0.13, 0.065, 7200, "sfx");
+        this.voice(1567.98, 1570, "sine", now + 0.33, 0.15, 0.026, "sfx");
         break;
     }
   }
@@ -175,43 +209,8 @@ export class GameAudio {
     oscillator.stop(startsAt + duration + 0.01);
   }
 
-  private percussion(
-    startsAt: number,
-    duration: number,
-    volume: number,
-    cutoff: number,
-    bus: AudioBus,
-  ): void {
-    const context = this.context;
-    const destination = bus === "music" ? this.musicGain : this.sfxGain;
-    if (!context || !destination) return;
-    if (!this.noiseBuffer) {
-      const sampleCount = Math.max(1, Math.floor(context.sampleRate * 0.35));
-      const buffer = context.createBuffer(1, sampleCount, context.sampleRate);
-      const data = buffer.getChannelData(0);
-      let seed = 0x1ce5cafe;
-      for (let index = 0; index < data.length; index += 1) {
-        seed = (seed * 1664525 + 1013904223) >>> 0;
-        data[index] = (seed / 0xffffffff) * 2 - 1;
-      }
-      this.noiseBuffer = buffer;
-    }
-    const source = context.createBufferSource();
-    const filter = context.createBiquadFilter();
-    const gain = context.createGain();
-    source.buffer = this.noiseBuffer;
-    filter.type = "highpass";
-    filter.frequency.setValueAtTime(cutoff, startsAt);
-    gain.gain.setValueAtTime(0.0001, startsAt);
-    gain.gain.exponentialRampToValueAtTime(volume, startsAt + 0.005);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + duration);
-    source.connect(filter).connect(gain).connect(destination);
-    source.start(startsAt);
-    source.stop(startsAt + duration + 0.01);
-  }
-
   private syncMusic(): void {
-    if (!this.context || !this.platformEnabled || !this.settings.music || this.paused) {
+    if (!this.context || this.context.state !== "running" || !this.platformEnabled || !this.settings.music || this.paused) {
       this.stopMusic();
       return;
     }
@@ -220,35 +219,26 @@ export class GameAudio {
 
   private scheduleMusic(): void {
     const context = this.context;
-    if (!context || !this.platformEnabled || !this.settings.music || this.paused) return;
-    // Original candy-parlor theme: two 16-step phrases with room for the SFX mix.
-    const melody = [
-      659.25, 783.99, 880, 783.99, 659.25, 587.33, 523.25, 0,
-      698.46, 880, 987.77, 880, 698.46, 659.25, 587.33, 0,
-      659.25, 783.99, 1046.5, 987.77, 880, 783.99, 659.25, 0,
-      587.33, 698.46, 880, 783.99, 659.25, 587.33, 523.25, 0,
-    ];
-    const chordRoots = [261.63, 220, 174.61, 196, 261.63, 220, 196, 261.63];
-    const step = this.musicStep % melody.length;
+    if (!context || context.state !== "running" || !this.platformEnabled || !this.settings.music || this.paused) return;
+    const section = Math.floor(this.musicStep / 16) % CAFE_MELODY.length;
+    const step = this.musicStep % 16;
     const startsAt = context.currentTime + 0.018;
-    const melodyNote = melody[step]!;
-    if (melodyNote > 0) {
-      this.voice(melodyNote, melodyNote * 1.002, "triangle", startsAt, 0.22, 0.064, "music");
-      this.voice(melodyNote * 2, melodyNote * 1.995, "sine", startsAt + 0.012, 0.13, 0.012, "music");
+    const melodyIndex = CAFE_MELODY[section]![step]!;
+    if (melodyIndex >= 0) {
+      const melodyNote = CAFE_SCALE[melodyIndex as number]!;
+      this.voice(melodyNote, melodyNote * 1.001, "triangle", startsAt, 0.25, 0.055, "music");
+      this.voice(melodyNote * 2, melodyNote * 1.998, "sine", startsAt + 0.014, 0.16, 0.009, "music");
     }
+    const chord = CAFE_CHORDS[(section + Math.floor(step / 4)) % CAFE_CHORDS.length]!;
     if (step % 4 === 0) {
-      const root = chordRoots[Math.floor(step / 4) % chordRoots.length]!;
-      this.voice(root / 2, root / 2 * .998, "sine", startsAt, 0.72, 0.075, "music");
-      this.voice(root, root * 1.002, "triangle", startsAt + 0.01, 0.58, 0.027, "music");
-      this.voice(root * 1.25, root * 1.25, "sine", startsAt + 0.02, 0.54, 0.018, "music");
-      this.voice(118, 52, "sine", startsAt, 0.12, 0.06, "music");
+      this.voice(chord[0] / 2, chord[0] / 2, "sine", startsAt, 1.08, 0.044, "music");
+      this.voice(chord[0], chord[0] * 1.001, "triangle", startsAt + 0.01, 0.76, 0.014, "music");
+      this.voice(chord[1], chord[1] * 1.001, "triangle", startsAt + 0.018, 0.72, 0.013, "music");
+      this.voice(chord[2], chord[2] * 1.001, "sine", startsAt + 0.026, 0.68, 0.011, "music");
     }
-    if (step % 2 === 1) {
-      this.percussion(startsAt, 0.045, 0.018, 7200, "music");
-    }
-    if (step % 8 === 6) {
-      this.percussion(startsAt, 0.1, 0.026, 4200, "music");
-    }
+    // A light off-beat sparkle supplies the cheerful pulse without noise hits.
+    if (step % 4 === 2) this.voice(chord[2] * 2, chord[2] * 2.002, "triangle", startsAt, 0.075, 0.011, "music");
+    if (step % 8 === 6) this.voice(1046.5, 1047.5, "sine", startsAt, 0.08, 0.006, "music");
     this.musicStep += 1;
     this.musicTimer = window.setTimeout(() => {
       this.musicTimer = undefined;

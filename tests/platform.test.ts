@@ -46,6 +46,7 @@ describe("YouTubePlatform", () => {
       configurable: true,
       value: {
         ytgame: {
+          IN_PLAYABLES_ENV: true,
           system: {
             isAudioEnabled: () => false,
             onAudioEnabledChange: (callback: typeof audioCallback) => { audioCallback = callback; },
@@ -66,6 +67,16 @@ describe("YouTubePlatform", () => {
     expect(onAudioChange).toHaveBeenLastCalledWith(true);
     expect(onPause).toHaveBeenCalledOnce();
     expect(onResume).toHaveBeenCalledOnce();
+  });
+
+  it("keeps local previews audible when the public SDK is only a no-op stub", () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { ytgame: { system: { isAudioEnabled: () => false } } },
+    });
+    const onAudioChange = vi.fn();
+    expect(new YouTubePlatform().register({ onAudioChange, onPause: vi.fn(), onResume: vi.fn() })).toBe(true);
+    expect(onAudioChange).toHaveBeenCalledWith(true);
   });
 
   it("grants rewarded results only from the SDK boolean", async () => {

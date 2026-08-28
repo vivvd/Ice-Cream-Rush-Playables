@@ -144,11 +144,24 @@ class IceCreamRushApp {
     });
     const rawSave = await this.platform.loadData();
     this.save = migrateSave(rawSave);
+    this.applyDevelopmentUnlock();
     this.audio.setSettings(this.save.settings);
     this.root.removeAttribute("aria-live");
     this.installDebugTools();
     this.render();
     this.platform.gameReady();
+  }
+
+  /** Local-preview shortcut for QA; it is removed from production builds by Vite. */
+  private applyDevelopmentUnlock(): void {
+    if (!import.meta.env.DEV || !new URLSearchParams(window.location.search).has("unlock")) return;
+    this.save.coins = 99_999;
+    this.save.upgrades = UPGRADES.map((upgrade) => upgrade.id);
+    this.save.campaign.completedThrough = TOTAL_LEVELS;
+    this.save.campaign.endlessUnlocked = true;
+    this.save.tutorialComplete = true;
+    this.save.bakeryTutorialComplete = true;
+    this.save.activeRun = null;
   }
 
   private installDebugTools(): void {
@@ -404,6 +417,7 @@ class IceCreamRushApp {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
+    this.audio.unlock();
     if (event.key === "Escape") {
       if (this.modal === "platformPause" || this.modal === "resumeGate") return;
       if (this.screen === "gameplay" && !this.modal) this.openManualPause();

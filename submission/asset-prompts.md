@@ -57,3 +57,11 @@ The text-free 1:1, 5:7, and 16:9 thumbnails are deterministic local composites o
 ## Milk Tea clarity redraw
 
 The Milk Tea recipe step was redrawn as the same clear takeaway cup used by Tea Cup and Bubble Tea, filled with creamy caramel milk tea but containing no tapioca pearls, straw, handle, or pitcher. The built-in ImageGen edit used the previous pitcher as the edit target, the empty cup as the silhouette reference, and the finished Bubble Tea as the rendering reference. A second background-extraction edit preserved the cup and removed the generated checkerboard to a real alpha channel. The accepted result was normalized to a centered 256×256 transparent WebP.
+
+## Ingredient clarity redraws
+
+> Create one isolated [SUBJECT] ingredient icon on a genuinely transparent background for a polished 2D mobile game. Rounded dark-plum outline, soft cel/gouache shading, candy-parlor palette, compact centered silhouette that reads at 48 px, generous transparent padding. No text, logo, watermark, frame, people, or scene.
+
+`[SUBJECT]` values: a clear glass pitcher filled with caramel milk tea, no tapioca pearls, no straw, handle and spout visible; a vanilla / chocolate / berry-pink piping bag with a ribbon of matching icing flowing from its tip. The piping bags must read as toppings only: no bun, pastry, plate, or finished dessert.
+
+The accepted outputs were normalized to 256×256 transparent WebP. Runtime names are `milk-tea-pitcher.webp`, `cinnamon-icing-vanilla.webp`, `cinnamon-icing-chocolate.webp`, and `cinnamon-icing-berry.webp`. The pitcher is used only in the ingredient bar; the assembly station continues to show the filled tea cup.

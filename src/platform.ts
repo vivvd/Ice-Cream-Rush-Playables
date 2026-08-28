@@ -24,6 +24,12 @@ export class YouTubePlatform {
   }
 
   register(callbacks: PlatformCallbacks): boolean {
+    // The public SDK script is a no-op outside YouTube and can report a muted
+    // state there. Local previews must remain audible after a user gesture.
+    if (!this.inPlayables) {
+      callbacks.onAudioChange(true);
+      return true;
+    }
     const audioEnabled = this.audioEnabled();
     callbacks.onAudioChange(audioEnabled);
     try {
@@ -40,6 +46,7 @@ export class YouTubePlatform {
   }
 
   audioEnabled(): boolean {
+    if (!this.inPlayables) return true;
     try {
       return window.ytgame?.system?.isAudioEnabled?.() ?? true;
     } catch {

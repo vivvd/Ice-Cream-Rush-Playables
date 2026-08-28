@@ -75,12 +75,14 @@ export function ingredientIcon(
   const names: Record<string, string> = {
     berrySoda: "berry-soda",
     teaCup: "tea-cup",
-    milkTea: "milk-tea",
+    // The bar icon is intentionally a pitcher: this is the ingredient poured
+    // into the cup. The station still renders the finished tea cup.
+    milkTea: "milk-tea-pitcher",
     pearls: "pearls",
     roll: "cinnamon-roll",
-    vanillaGlaze: "cinnamon-roll-vanilla",
-    chocolateGlaze: "cinnamon-roll-chocolate",
-    berryGlaze: "cinnamon-roll-berry",
+    vanillaGlaze: "cinnamon-icing-vanilla",
+    chocolateGlaze: "cinnamon-icing-chocolate",
+    berryGlaze: "cinnamon-icing-berry",
   };
   return `<span class="ingredient-art imagegen-ingredient kind-${kind}"><img src="${productAsset(names[id] ?? id)}" alt="" draggable="false"></span>`;
 }

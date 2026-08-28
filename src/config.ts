@@ -58,7 +58,7 @@ export const LABELS: Record<BaseId | FlavorId | ToppingId | FastDrinkId | DrinkC
   drizzle: "Chocolate drizzle",
   lemonade: "Lemonade",
   berrySoda: "Berry Soda",
-  teaCup: "Tea Cup",
+  teaCup: "Empty Cup",
   milkTea: "Milk Tea",
   pearls: "Tapioca Pearls",
   roll: "Cinnamon Roll",
